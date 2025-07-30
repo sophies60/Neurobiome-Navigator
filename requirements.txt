@@ -1,0 +1,13 @@
+streamlit==1.31.0
+neo4j==5.13.0
+py2neo==2021.2.4
+python-dotenv==1.0.0
+pandas==2.1.0
+networkx==3.2.1
+langchain
+openai
+tiktoken
+faiss-cpu
+PyPDF2==3.0.1
+PyMuPDF==1.26.0
+pydantic-ai
