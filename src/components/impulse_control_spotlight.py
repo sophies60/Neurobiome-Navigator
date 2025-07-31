@@ -4,6 +4,7 @@ from agent import minerva_agent, MINERVADependencies
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from .survey import SurveyManager, SurveyType
 
 # Dictionary of microbiome descriptions
 MICROBIOME_DESCRIPTIONS = {
@@ -238,6 +239,10 @@ async def create_impulse_control_spotlight():
                     'Hypersexuality': hypersexuality,
                     'Punding': punding
                 }
+                
+                # Save responses to session state
+                survey_manager = SurveyManager()
+                survey_manager.update_responses(SurveyType.IMPULSE_CONTROL, survey_responses)
                 
                 # Create a clean DataFrame with the survey responses in the original order
                 symptom_order = ['Punding', 'Hypersexuality', 'Eating', 'Shopping', 'Gambling']

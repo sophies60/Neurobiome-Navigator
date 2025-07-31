@@ -1,5 +1,5 @@
 import streamlit as st
-from .survey import SurveyManager, get_survey_summary, show_survey
+from .survey import SurveyManager, SurveyType
 
 def create_home_screen():
     """Create the home screen with navigation cards"""
@@ -112,8 +112,26 @@ def create_home_screen():
     # RIGHT COLUMN
     st.markdown('<div class="right-col">', unsafe_allow_html=True)
     
-    # --- Personal Snapshot Card ---
-    st.markdown("### 🎯 Personal Snapshot")
+    # Personal Snapshot
+    
+    # Get survey summaries
+    survey_manager = SurveyManager()
+    oral_health_summary = survey_manager.get_oral_health_summary()
+    impulse_control_summary = survey_manager.get_impulse_control_summary()
+    
+    # Get last updated time
+    last_updated = survey_manager.get_last_updated_any()
+    update_text = f"Last updated: {last_updated}" if last_updated else "Complete surveys to see your data"
+    
+    # Personal Snapshot Card - CSS Styles
+    st.markdown("""
+    <style>
+    .snapshot-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+        margin: 1rem auto;
         max-width: 600px;
         width: 100%;
         font-family: 'Arial', sans-serif;
@@ -124,6 +142,9 @@ def create_home_screen():
         padding: 1.25rem 1.5rem;
         margin: 0;
         border-bottom: 1px solid #eee;
+    }
+    .card-section:last-child {
+        border-bottom: none;
     }
     .card-section:last-child {
         border-bottom: none; /* Remove border from last section */
@@ -141,17 +162,6 @@ def create_home_screen():
         font-size: 0.95rem;
         text-align: center;
     }
-    .quick-tip {
-        background: #f0f7ff;
-        padding: 1rem 1.5rem;
-        border-left: 4px solid #6c63ff;
-        margin: 0;
-    }
-    .quick-tip-title {
-        color: #6c63ff;
-        font-weight: 600;
-        text-align: center;
-    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -164,12 +174,20 @@ def create_home_screen():
     """, unsafe_allow_html=True)
     
     # Survey Summary Section
-    survey_summary = get_survey_summary()
-    st.markdown(f"""
-    <div class="card-section">
-        <div class="card-title">📋 Survey Summary</div>
-        <div class="card-text">
-            {survey_summary}
+    st.markdown("""
+    <div class='card-section'>
+        <div class='card-title'>Survey Summary</div>
+        <div class='card-text' style='font-size: 0.9rem; color: #666; margin-bottom: 1rem; text-align: center;'>""" + update_text + """</div>
+        <div style='display: flex; justify-content: center; gap: 2rem; margin-top: 1rem;'>
+            <div style='text-align: center; padding: 0 1rem;'>
+                <div style='font-weight: 600; color: #3a3a3a; margin-bottom: 0.5rem;'>🦷 Oral Health</div>
+                <div style='font-size: 0.9rem; color: #444;'>""" + oral_health_summary + """</div>
+            </div>
+            <div style='width: 1px; background-color: #eee;'></div>
+            <div style='text-align: center; padding: 0 1rem;'>
+                <div style='font-weight: 600; color: #3a3a3a; margin-bottom: 0.5rem;'>🧠 Impulse Control</div>
+                <div style='font-size: 0.9rem; color: #444;'>""" + impulse_control_summary + """</div>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -190,25 +208,20 @@ def create_home_screen():
     <div class="card-section">
         <div class="card-title">🦷 Oral Health</div>
         <div class="card-text">
-            <b>Next checkup:</b> In 3 months
+            <b>Tip:</b> Brush twice daily with fluoride toothpaste and floss regularly to maintain gum health and reduce inflammation.
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     # Quick Tip Section
     st.markdown("""
-    <div class="quick-tip">
-        <div class="quick-tip-title">💡 Quick Tip</div>
-        <div class="card-text" style="margin-top: 0.5rem;">
+    <div class="card-section">
+        <div class="card-title">💡 Quick Tip</div>
+        <div class="card-text">
             10-min walk after meals helps digestion
         </div>
     </div>
-    </div>
     """, unsafe_allow_html=True)
-
-    # Show survey form in an expander
-    with st.expander("✏️ Update My Health Survey", expanded=False):
-        show_survey()
     
     st.markdown('</div>', unsafe_allow_html=True)  # Close right-col
     st.markdown('</div>', unsafe_allow_html=True)  # Close main-container

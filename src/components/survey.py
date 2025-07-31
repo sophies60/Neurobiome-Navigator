@@ -1,65 +1,61 @@
 import streamlit as st
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
+from enum import Enum
+
+class SurveyType(Enum):
+    ORAL_HEALTH = "oral_health"
+    IMPULSE_CONTROL = "impulse_control"
 
 class SurveyManager:
     """Manages survey data collection and storage in session state."""
     
     def __init__(self):
         # Initialize session state for all survey modules
-        if 'oral_health_responses' not in st.session_state:
-            st.session_state.oral_health_responses = {}
-        if 'impulse_control_responses' not in st.session_state:
-            st.session_state.impulse_control_responses = {}
-        if 'gut_insight_responses' not in st.session_state:
-            st.session_state.gut_insight_responses = {}
-        if 'survey_last_updated' not in st.session_state:
-            st.session_state.survey_last_updated = None
+        if 'survey_data' not in st.session_state:
+            st.session_state.survey_data = {
+                SurveyType.ORAL_HEALTH.value: {
+                    'responses': {},
+                    'last_updated': None
+                },
+                SurveyType.IMPULSE_CONTROL.value: {
+                    'responses': {},
+                    'last_updated': None
+                }
+            }
     
-    def update_oral_health_responses(self, responses: Dict[str, int]) -> None:
-        """Update oral health survey responses."""
-        st.session_state.oral_health_responses = {
-            'bleeding_gums': responses.get('Bleeding Gums', 0),
-            'dry_mouth': responses.get('Dry Mouth', 0),
-            'bad_breath': responses.get('Bad Breath', 0),
-            'tooth_sensitivity': responses.get('Tooth Sensitivity', 0),
-            'mouth_pain': responses.get('Mouth Pain', 0)
-        }
-        st.session_state.survey_last_updated = datetime.now().isoformat()
+    def update_responses(self, survey_type: SurveyType, responses: Dict[str, int]) -> None:
+        """Update survey responses for a specific survey type."""
+        if survey_type.value not in st.session_state.survey_data:
+            st.session_state.survey_data[survey_type.value] = {
+                'responses': {},
+                'last_updated': None
+            }
+        
+        st.session_state.survey_data[survey_type.value]['responses'] = responses
+        st.session_state.survey_data[survey_type.value]['last_updated'] = datetime.now().isoformat()
     
-    def update_impulse_control_responses(self, responses: Dict[str, int]) -> None:
-        """Update impulse control survey responses."""
-        st.session_state.impulse_control_responses = {
-            'gambling_urge': responses.get('Gambling Urge', 0),
-            'impulsive_shopping': responses.get('Impulsive Shopping', 0),
-            'binge_eating': responses.get('Binge Eating', 0),
-            'increased_sexual_urges': responses.get('Increased Sexual Urges', 0),
-            'purposeless_activities': responses.get('Purposeless Activities', 0)
-        }
-        st.session_state.survey_last_updated = datetime.now().isoformat()
-    
-    def update_gut_insight_responses(self, responses: Dict[str, int]) -> None:
-        """Update gut insight survey responses."""
-        st.session_state.gut_insight_responses = responses
-        st.session_state.survey_last_updated = datetime.now().isoformat()
+    def get_responses(self, survey_type: SurveyType) -> Dict[str, int]:
+        """Get responses for a specific survey type."""
+        return st.session_state.survey_data.get(survey_type.value, {}).get('responses', {})
     
     def get_oral_health_summary(self) -> str:
         """Generate a summary of oral health responses."""
-        if not hasattr(st.session_state, 'oral_health_responses') or not st.session_state.oral_health_responses:
+        responses = self.get_responses(SurveyType.ORAL_HEALTH)
+        if not responses:
             return "No oral health data available. Please complete the oral health survey."
         
-        responses = st.session_state.oral_health_responses
         issues = []
         
-        if responses.get('bleeding_gums', 0) >= 3:
+        if responses.get('Bleeding Gums', 0) >= 3:
             issues.append("bleeding gums")
-        if responses.get('dry_mouth', 0) >= 3:
+        if responses.get('Dry Mouth', 0) >= 3:
             issues.append("dry mouth")
-        if responses.get('bad_breath', 0) >= 3:
+        if responses.get('Bad Breath', 0) >= 3:
             issues.append("bad breath")
-        if responses.get('tooth_sensitivity', 0) >= 3:
+        if responses.get('Tooth Sensitivity', 0) >= 3:
             issues.append("tooth sensitivity")
-        if responses.get('mouth_pain', 0) >= 3:
+        if responses.get('Mouth Pain', 0) >= 3:
             issues.append("mouth pain")
         
         if not issues:
@@ -69,31 +65,42 @@ class SurveyManager:
     
     def get_impulse_control_summary(self) -> str:
         """Generate a summary of impulse control responses."""
-        if not hasattr(st.session_state, 'impulse_control_responses') or not st.session_state.impulse_control_responses:
+        responses = self.get_responses(SurveyType.IMPULSE_CONTROL)
+        if not responses:
             return "No impulse control data available. Please complete the impulse control survey."
         
-        responses = st.session_state.impulse_control_responses
         concerns = []
         
-        if responses.get('gambling_urge', 0) >= 3:
+        if responses.get('Gambling', 0) >= 3:
             concerns.append("gambling urges")
-        if responses.get('impulsive_shopping', 0) >= 3:
+        if responses.get('Shopping', 0) >= 3:
             concerns.append("impulsive shopping")
-        if responses.get('binge_eating', 0) >= 3:
+        if responses.get('Eating', 0) >= 3:
             concerns.append("binge eating")
-        if responses.get('increased_sexual_urges', 0) >= 3:
+        if responses.get('Hypersexuality', 0) >= 3:
             concerns.append("increased sexual urges")
-        if responses.get('purposeless_activities', 0) >= 3:
-            concerns.append("purposeless activities")
+        if responses.get('Punding', 0) >= 3:
+            concerns.append("repetitive, purposeless activities")
         
         if not concerns:
             return "Your impulse control appears to be well managed."
         else:
             return f"Consider discussing these impulse control concerns with your healthcare provider: {', '.join(concerns)}."
     
-    def get_last_updated(self) -> Optional[str]:
+    def get_last_updated(self, survey_type: SurveyType) -> Optional[str]:
+        """Get when a specific survey was last updated."""
+        if 'survey_data' not in st.session_state:
+            return None
+        return st.session_state.survey_data.get(survey_type.value, {}).get('last_updated')
+    
+    def get_last_updated_any(self) -> Optional[str]:
         """Get when any survey was last updated."""
-        return st.session_state.get('survey_last_updated')
+        latest = None
+        for survey_type in SurveyType:
+            updated = self.get_last_updated(survey_type)
+            if updated and (latest is None or updated > latest):
+                latest = updated
+        return latest
 
 def show_survey() -> None:
     """Display the survey form and handle submissions."""

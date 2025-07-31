@@ -229,7 +229,7 @@ async def create_oral_health_pd_connection():
                 
                 # Save responses to session state
                 survey_manager = SurveyManager()
-                survey_manager.update_oral_health_responses(survey_responses)
+                survey_manager.update_responses(SurveyType.ORAL_HEALTH, survey_responses)
                 
                 # Create a clean DataFrame with the survey responses in the original order
                 symptom_order = ['Bleeding Gums', 'Dry Mouth', 'Bad Breath', 'Tooth Sensitivity', 'Mouth Pain']
