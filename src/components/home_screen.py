@@ -225,3 +225,14 @@ def create_home_screen():
     
     st.markdown('</div>', unsafe_allow_html=True)  # Close right-col
     st.markdown('</div>', unsafe_allow_html=True)  # Close main-container
+    
+    # About Section
+    st.markdown("""
+    <div style='margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 12px; text-align: center;'>
+        <h3 style='color: #4a4a4a; margin-bottom: 1rem;'>About This App</h3>
+        <p style='color: #555; line-height: 1.6; font-size: 1.05rem;'>
+            Created by Sophie Shih<br>
+            Dedicated with love to my grandmother, and her journey with Parkinson's.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
