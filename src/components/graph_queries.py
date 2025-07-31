@@ -17,19 +17,27 @@ bolt_url = f'bolt://{neo4j_host}:{neo4j_port}'
 @dataclass
 class GraphQueries:
     def __init__(self):
-        # Initialize Neo4j connection
-        neo4j_host = os.getenv('NEO4J_HOST', 'xneo4jbolt.mllm.bet')
-        neo4j_port = os.getenv('NEO4J_PORT', '443')
-        neo4j_user = os.getenv('NEO4J_USER', 'neo4j')
-        neo4j_password = os.getenv('NEO4J_PASSWORD', 'siim2025')
+        # Initialize Neo4j connection with explicit settings for local Docker
+        self.bolt_url = 'bolt://localhost:7687'  # Direct connection to Docker container
+        neo4j_user = 'neo4j'
+        neo4j_password = 'synhodo123'
         
-        self.bolt_url = f'neo4j+s://{neo4j_host}:{neo4j_port}'
-        self.graph = Graph(
-            self.bolt_url,
-            auth=(neo4j_user, neo4j_password),
-            secure=True,
-            verify=True
-        )
+        try:
+            # Initialize the Neo4j connection
+            self.graph = Graph(
+                self.bolt_url,
+                auth=(neo4j_user, neo4j_password),
+                secure=False  # Disable SSL for local connections
+            )
+            # Test the connection with a simple query
+            result = self.graph.run("RETURN 1").data()
+            print(f"Successfully connected to Neo4j at {self.bolt_url}")
+        except Exception as e:
+            error_msg = f"Failed to connect to Neo4j at {self.bolt_url}: {str(e)}"
+            print(error_msg)
+            if 'st' in globals():
+                st.error(error_msg)
+            raise
 
     def get_all_diseases(self) -> pd.DataFrame:
         """Get all diseases with their CUIs"""

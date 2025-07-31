@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from minerva import MINERVA
 from agent import minerva_agent, MINERVADependencies
 import asyncio
+from .survey import SurveyManager
 
 MICROBIOME_DESCRIPTIONS = {
     "Streptobacillaceae": (
@@ -162,6 +163,7 @@ async def create_oral_health_pd_connection():
         col1, col2 = st.columns(2)
         
         with col1:
+            st.markdown("<p style='color: #4a5568; margin-bottom: 10px; font-size: 0.95rem;'>Select from the most influential oral microbiomes linked to Parkinson's Disease:</p>", unsafe_allow_html=True)
             selected_microbes = st.multiselect(
                 "Select Microbiomes",
                 options=specific_microbiomes,
@@ -224,6 +226,10 @@ async def create_oral_health_pd_connection():
                     'Tooth Sensitivity': tooth_sensitivity,
                     'Mouth Pain': mouth_pain
                 }
+                
+                # Save responses to session state
+                survey_manager = SurveyManager()
+                survey_manager.update_oral_health_responses(survey_responses)
                 
                 # Create a clean DataFrame with the survey responses in the original order
                 symptom_order = ['Bleeding Gums', 'Dry Mouth', 'Bad Breath', 'Tooth Sensitivity', 'Mouth Pain']

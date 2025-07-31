@@ -68,6 +68,7 @@ async def create_impulse_control_spotlight():
         col1, col2 = st.columns(2)
         
         with col1:
+            st.markdown("<p style='color: #4a5568; margin-bottom: 10px; font-size: 0.95rem;'>Select from the most influential gut microbiomes linked to Impulse Control Disorders in Parkinson's:</p>", unsafe_allow_html=True)
             selected_microbes = st.multiselect(
                 "Select Microbiomes",
                 options=list(MICROBIOME_DESCRIPTIONS.keys()),
