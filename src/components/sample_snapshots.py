@@ -233,4 +233,3 @@ def create_sample_snapshots():
         tips=[]
     )
 
-create_sample_snapshots()
