@@ -11,3 +11,4 @@ faiss-cpu
 PyPDF2==3.0.1
 PyMuPDF==1.26.0
 pydantic-ai
+streamlit-agraph

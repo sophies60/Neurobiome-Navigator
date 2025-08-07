@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from minerva import MINERVA
 from agent import minerva_agent, MINERVADependencies
 import asyncio
-from .survey import SurveyManager
+from .survey import SurveyManager, SurveyType
 
 MICROBIOME_DESCRIPTIONS = {
     "Streptobacillaceae": (

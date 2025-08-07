@@ -229,7 +229,7 @@ def create_sample_snapshots():
         impulse_control="Uses spending limits and family support",
         dietary_tip="<b>Try:</b> Nutrient-rich smoothies with Greek yogurt and berries<br><b>Remember:</b> Smaller, more frequent meals can be easier to manage",
         oral_health_tip="Using a straw for acidic drinks helps protect tooth enamel.",
-        quick_tip="Using a pill organizer with alarms helps me stay on schedule with medications.",
+        quick_tip="Using a pill organizer with alarms helps for staying on schedule with medications.",
         tips=[]
     )
 
