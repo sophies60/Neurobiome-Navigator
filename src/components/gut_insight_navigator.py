@@ -188,7 +188,10 @@ def create_gut_insight_navigator():
                 # Get disease-food relations for Parkinson's disease
                 disease_food_relations = querier.get_disease_food_relations(parkinsons_cui)
                 
-                if disease_food_relations is not None and not disease_food_relations.empty:
+                if disease_food_relations:  # Check if list is not empty
+                    # Convert list of dicts to DataFrame
+                    disease_food_relations = pd.DataFrame(disease_food_relations)
+                    
                     # Calculate food-disease strength
                     disease_food_relations["food_disease_strength"] = (
                         disease_food_relations["food_microbe_strength"].abs() +

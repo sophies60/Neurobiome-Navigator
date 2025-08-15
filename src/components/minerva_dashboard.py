@@ -84,10 +84,11 @@ def create_minerva_dashboard():
                 disease_cui = all_diseases[all_diseases['name'] == selected_disease]['cui'].iloc[0]
                 results = minerva.get_disease_food_relations(disease_cui)
                 
-                if not results.empty:
-                    # Display table
+                if results:  # Check if list is not empty
+                    # Convert list of dicts to DataFrame for display
+                    df_results = pd.DataFrame(results)
                     st.subheader(f"Top Foods Associated with {selected_disease}")
-                    st.dataframe(results)
+                    st.dataframe(df_results)
                     
                     # Create visualization
                     fig = px.scatter(

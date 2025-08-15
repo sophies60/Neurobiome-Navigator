@@ -3,6 +3,8 @@ from py2neo import Graph, NodeMatcher
 import streamlit as st
 from dataclasses import dataclass
 import os
+import time
+from metrics import timer, log_csv, now_iso
 
 # Fetch connection details from environment variables
 neo4j_host = os.getenv('NEO4J_HOST', '0.0.0.0')
@@ -39,13 +41,32 @@ class GraphQueries:
                 st.error(error_msg)
             raise
 
+    def _run_timed(self, query: str, params: dict | None = None, label: str = ""):
+        t0 = time.perf_counter()
+        cursor = self.graph.run(query, **(params or {}))
+        data = cursor.data()
+        dt_ms = (time.perf_counter() - t0) * 1000
+
+        # Print to terminal
+        print(f"[METRIC] neo4j_query_ms={dt_ms:.2f} label={label} rows={len(data)}")
+
+        # Optional CSV
+        log_csv({
+            "ts": now_iso(),
+            "metric": "neo4j_query",
+            "label": label,
+            "ms": round(dt_ms, 2),
+            "rows": len(data)
+        })
+        return data
+
     def get_all_diseases(self) -> pd.DataFrame:
         """Get all diseases with their CUIs"""
         query = """
         MATCH (d:Disease)
         RETURN d.name as name, d.cui as cui
         """
-        result = self.graph.run(query).data()
+        result = self._run_timed(query, label="get_all_diseases")
         return pd.DataFrame(result)
 
     def get_disease_food_relations(self, disease_cui: str) -> pd.DataFrame:
@@ -67,7 +88,7 @@ class GraphQueries:
                 ELSE 'negative'
             END as derived_relation
         """
-        result = self.graph.run(query, disease_cui=disease_cui).data()
+        result = self._run_timed(query, params={"disease_cui": disease_cui}, label="get_disease_food_relations")
         return pd.DataFrame(result)
 
     @st.cache_data
@@ -76,7 +97,7 @@ class GraphQueries:
         MATCH (m:{})-[:STRENGTH]-(d) 
         RETURN COUNT(DISTINCT m) as count
         """.format(label)
-        result = self.graph.run(query).data()
+        result = self._run_timed(query, label="count_nodes")
         return result[0]['count']
 
     @st.cache_data
@@ -85,7 +106,7 @@ class GraphQueries:
         MATCH (:Microbe)-[r:NEGATIVE|POSITIVE]->(:Disease)
         RETURN count(DISTINCT r.pmid) AS total_papers
         """
-        result = self.graph.run(query).data()
+        result = self._run_timed(query, label="count_papers")
         return result[0]['total_papers']
 
     @st.cache_data
@@ -94,15 +115,14 @@ class GraphQueries:
                 MATCH ()-[r:POSITIVE]->()
                 RETURN count(r) AS count
                 """
-        result = self.graph.run(query).data()
+        result = self._run_timed(query, label="count_relationships")
         positives = result[0]['count']
 
         query = """
                 MATCH ()-[r:NEGATIVE]->()
                 RETURN count(r) AS count
                 """
-        with self.driver.session() as session:
-            result = session.run(query).data()
+        result = self._run_timed(query, label="count_relationships")
         negatives = result[0]['count']
         total = positives + negatives
         return total
@@ -116,8 +136,7 @@ class GraphQueries:
         m.synonyms as synonyms
         """.format(list(dicto.keys())[0], list(dicto.values())[0])
 
-        with self.driver.session() as session:
-            result = session.run(query).data()
+        result = self._run_timed(query, params={"dicto": dicto}, label="get_microbe_by_property")
         return result[0]
 
 
@@ -139,8 +158,7 @@ class GraphQueries:
                        d.synonyms as synonyms
                 """.format(key, value)
 
-        with self.driver.session() as session:
-            result = session.run(query).data()
+        result = self._run_timed(query, params={"dicto": dicto}, label="get_disease_by_property")
         return result[0] if result else None
 
     @st.cache_data
@@ -152,7 +170,7 @@ class GraphQueries:
         """.format('POSITIVE', list(d_dicto.keys())[0], list(d_dicto.values())[0],
                    list(m_dicto.keys())[0], list(m_dicto.values())[0])
 
-        result_positive = self.graph.run(query).to_data_frame()
+        result_positive = self._run_timed(query, params={"m_dicto": m_dicto, "d_dicto": d_dicto}, label="get_relationship_by_microbe_disease")
 
         query = """
             Match (d:Disease)-[r:{}]-(m:Microbe) 
@@ -161,7 +179,7 @@ class GraphQueries:
                 """.format('NEGATIVE', list(d_dicto.keys())[0], list(d_dicto.values())[0],
                            list(m_dicto.keys())[0], list(m_dicto.values())[0])
 
-        result_negative = self.graph.run(query).to_data_frame()
+        result_negative = self._run_timed(query, params={"m_dicto": m_dicto, "d_dicto": d_dicto}, label="get_relationship_by_microbe_disease")
 
         result = pd.concat([result_negative, result_positive], axis=0)
         return result
@@ -177,7 +195,7 @@ class GraphQueries:
                 """.format('STRENGTH', list(d_dicto.keys())[0], list(d_dicto.values())[0],
                            list(m_dicto.keys())[0], list(m_dicto.values())[0])
 
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"m_dicto": m_dicto, "d_dicto": d_dicto}, label="get_strength_by_microbe_disease")
         return result
 
     def get_shortest_path_by_microbe_disease(self, m_dicto, d_dicto):
@@ -189,7 +207,7 @@ class GraphQueries:
                         """.format(list(m_dicto.keys())[0], list(m_dicto.values())[0],
                                    list(d_dicto.keys())[0], list(d_dicto.values())[0])
 
-        result = self.graph.run(query).to_table()
+        result = self._run_timed(query, params={"m_dicto": m_dicto, "d_dicto": d_dicto}, label="get_shortest_path_by_microbe_disease")
         return result
 
     @st.cache_data
@@ -217,7 +235,7 @@ class GraphQueries:
                      ELSE "negative"
                    END AS derived_relation
         """.format(cui)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"cui": cui}, label="get_disease_food_relations")
         return result
     
     @st.cache_data
@@ -240,7 +258,7 @@ class GraphQueries:
               target.official_name as target,
               labels(target)[0] AS target_type
         """.format(cui)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"cui": cui}, label="find_one_hop_disease_food")
         return result
 
     @st.cache_data
@@ -251,8 +269,7 @@ class GraphQueries:
         RETURN f.official_name as official_name, f.tui as tui, f.snomedct_concept as snomedct_concept, 
                f.definition as definition, f.synonyms as synonyms, f.cui as cui, f.name as name
         """.format(list(dicto.keys())[0], list(dicto.values())[0])
-        with self.driver.session() as session:
-            result = session.run(query).data()
+        result = self._run_timed(query, params={"dicto": dicto}, label="get_food_by_property")
         if result:
             return result[0]
         else:
@@ -266,10 +283,10 @@ class GraphQueries:
                  count(CASE WHEN r.strength_raw >= 0 THEN 1 END) AS strength_positive,
                  count(CASE WHEN r.strength_raw < 0 THEN 1 END) AS strength_negative
             ORDER BY strength_count DESC
-            RETURN m.name AS microbe_name, strength_count, strength_positive, strength_negative
+            RETURN m.name AS microbe_name, strength_coun    t, strength_positive, strength_negative
             LIMIT {}
         """.format(n)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"n": n}, label="get_microbes_with_more_connections_pos_neg")
         return result
     
     @st.cache_data
@@ -279,7 +296,7 @@ class GraphQueries:
         RETURN DISTINCT f.cui AS cui, f.name AS name, f.official_name AS official_name
         ORDER BY f.official_name ASC
         """
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, label="get_all_food")
         return result
 
     @st.cache_data
@@ -301,7 +318,7 @@ class GraphQueries:
             WHERE f.cui = '{}' AND r.strength_raw < 0
             RETURN m.name as microbe_name, f.official_name as food_name, r.strength_raw as strength, f.cui as cui
             """.format(cui)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"cui": cui}, label="get_food_relations")
         return result
     
     @st.cache_data
@@ -324,7 +341,7 @@ class GraphQueries:
               target.official_name as target,
               labels(target)[0] AS target_type
         """.format(cui)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"cui": cui}, label="find_one_hop_food")
         return result
 
     def get_related_publications_food(self, cui=''):
@@ -339,7 +356,7 @@ class GraphQueries:
                    r.publication_year as year, r.journal as journal, r.title as title, r.evidence as evidence
             ORDER BY r.publication_year
             """.format(cui)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"cui": cui}, label="get_related_publications_food")
         return result
 
 
@@ -354,7 +371,7 @@ class GraphQueries:
             RETURN m.name AS microbe_name, total_relations, negative_count, positive_count
             LIMIT {}
         """.format(n)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"n": n}, label="get_microbes_with_more_references_pos_neg")
         return result
 
     @st.cache_data
@@ -368,7 +385,7 @@ class GraphQueries:
             RETURN m.name AS disease_name, strength_count, strength_positive, strength_negative
             LIMIT {}
                 """.format(n)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"n": n}, label="get_diseases_with_more_connections_pos_neg")
         return result
 
 
@@ -383,7 +400,7 @@ class GraphQueries:
             RETURN m.name AS disease_name, total_relations, negative_count, positive_count
             LIMIT {}
         """.format(n)
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"n": n}, label="get_diseases_with_more_references_pos_neg")
         return result
 
     @st.cache_data
@@ -393,7 +410,7 @@ class GraphQueries:
         RETURN r.publication_year as publication_year, count(r) AS relationship_count
         ORDER BY r.publication_year
         """
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, label="get_relationships_by_year")
         return result
 
     @st.cache_data
@@ -403,7 +420,7 @@ class GraphQueries:
         RETURN r.publication_year as publication_year, count(DISTINCT r.pmid) as publications
         ORDER BY r.publication_year
         """
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, label="get_publications_by_year")
         return result
 
     @st.cache_data
@@ -414,9 +431,9 @@ class GraphQueries:
         ORDER BY Strength DESC
         Limit {}
         """.format(strength_type, n)
-        result = self.graph.run(query).to_data_frame()
-        return result
-
+        result = self._run_timed(query, label="rank_by_positive_strength")
+        return pd.DataFrame(result)
+    
     @st.cache_data
     def rank_by_negative_strength(self, strength_type='strength_raw', n=10):
         query = """
@@ -424,9 +441,9 @@ class GraphQueries:
         RETURN n1.name AS Microbe, n2.name AS Disease, r.{} AS Strength
         ORDER BY Strength ASC
         Limit {}
-        """.format( strength_type, n)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        """.format(strength_type, n)
+        result = self._run_timed(query, label="rank_by_negative_strength")
+        return pd.DataFrame(result)
 
     @st.cache_data
     def get_more_relevant_papers(self, n=10):
@@ -437,7 +454,7 @@ class GraphQueries:
         Limit 10
         RETURN Title, PMID, Frequency 
         """
-        result = self.graph.run(query).to_data_frame()
+        result = self._run_timed(query, params={"n": n}, label="get_more_relevant_papers")
         return result
 
     @st.cache_data
@@ -446,11 +463,11 @@ class GraphQueries:
         MATCH (m:Microbe)-[r:NEGATIVE|POSITIVE]->(d:Disease)
         return r.pmid AS PMID, r.journal as Journal
         """
-        result = self.graph.run(query).to_data_frame()
-        result.index = result['PMID']
-        result = result[~result.index.duplicated(keep='first')]
-        result = result['Journal'].value_counts().sort_values(ascending=False).iloc[:n].to_frame('counts')
-        return result
+        result = self._run_timed(query, label="get_publications_by_journal")
+        df = pd.DataFrame(result)
+        df.index = df['PMID']
+        df = df[~df.index.duplicated(keep='first')]
+        return df['Journal'].value_counts().sort_values(ascending=False).iloc[:n].to_frame('counts')
 
     @st.cache_data
     def get_all_microbes(self):
@@ -458,9 +475,9 @@ class GraphQueries:
         MATCH (m:Microbe)-[:STRENGTH]-(:Disease)
         RETURN DISTINCT m.cui AS cui, m.tax_id as tax_id, m.name AS name
         """
-        result = self.graph.run(query).to_data_frame()
-        result = result.sort_values('name', ascending=True)
-        return result
+        result = self._run_timed(query, label="get_all_microbes")
+        df = pd.DataFrame(result)
+        return df.sort_values('name', ascending=True)
 
 
     @st.cache_data
@@ -469,9 +486,9 @@ class GraphQueries:
         MATCH (m:Disease)-[:STRENGTH]-(:Microbe)
         RETURN DISTINCT m.cui AS cui, m.name AS name, m.official_name AS official_name
         """
-        result = self.graph.run(query).to_data_frame()
-        result = result.sort_values('name', ascending=True)
-        return result
+        result = self._run_timed(query, label="get_all_diseases")
+        df = pd.DataFrame(result)
+        return df.sort_values('name', ascending=True)
 
     def find_one_hop_microbe(self, cui):
         query = """
@@ -493,8 +510,8 @@ class GraphQueries:
               target.name AS target,
                 labels(target)[0] AS target_type // Get the first label
         """.format(cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label="find_one_hop_microbe")
+        return pd.DataFrame(result)
 
     def find_one_hop_disease(self, cui):
         query = """
@@ -516,8 +533,8 @@ class GraphQueries:
               target.name AS target,
                 labels(target)[0] AS target_type // Get the first label
         """.format(cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label="find_one_hop_disease")
+        return pd.DataFrame(result)
 
     @st.cache_data
     def get_food_disease_relations(self, cui):
@@ -544,8 +561,8 @@ class GraphQueries:
                      ELSE "negative"
                    END AS derived_relation
         """.format(cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label="get_food_disease_relations")
+        return pd.DataFrame(result)
 
     def get_microbe_relations(self, cui, rel_type='POSIIVE'):
         if rel_type == 'POSITIVE':
@@ -560,8 +577,8 @@ class GraphQueries:
             WHERE m.cui = '{}' AND r.strength_raw < 0
             RETURN m.name as microbe_name, d.name as disease_name, r.strength_raw as strength, d.cui as cui
             """.format(cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label=f"get_microbe_relations_{rel_type.lower()}")
+        return pd.DataFrame(result)
 
     def get_disease_relations(self, cui, rel_type='POSIIVE'):
         if rel_type == 'POSITIVE':
@@ -576,8 +593,8 @@ class GraphQueries:
             WHERE d.cui = '{}' AND r.strength_raw < 0
             RETURN d.name as disease_name, m.name as microbe_name, r.strength_raw as strength, m.cui as cui
             """.format(cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label=f"get_disease_relations_{rel_type.lower()}")
+        return pd.DataFrame(result)
 
     def popularity_in_time(self, label='Microbe', cui=''):
         query = """
@@ -586,8 +603,8 @@ class GraphQueries:
         RETURN r.publication_year as publication_year, count(DISTINCT r.pmid) as publications
         ORDER BY r.publication_year
         """.format(label, cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label=f"popularity_in_time_{label.lower()}")
+        return pd.DataFrame(result)
 
     def get_related_publications_microbe(self, cui=''):
         query = """
@@ -597,8 +614,8 @@ class GraphQueries:
              r.publication_year as year, r.journal as journal, r.title as title, r.evidence as evidence
             ORDER BY r.publication_year
             """.format(cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label="get_related_publications_microbe")
+        return pd.DataFrame(result)
 
     def get_related_publications_disease(self, cui=''):
         query = """
@@ -608,8 +625,8 @@ class GraphQueries:
              r.publication_year as year, r.journal as journal, r.title as title, r.evidence as evidence
             ORDER BY r.publication_year
             """.format(cui)
-        result = self.graph.run(query).to_data_frame()
-        return result
+        result = self._run_timed(query, label="get_related_publications_disease")
+        return pd.DataFrame(result)
 
 if __name__ == '__main__':
     querier = GraphQueries()

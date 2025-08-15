@@ -1,0 +1,4 @@
+error,metric,ts
+No research papers loaded. Please call load_research_papers() first.,agent_error,2025-08-14T19:33:06.890Z
+get_disease_food_relations,neo4j_query,179.57,8162,2025-08-14T19:34:10.446Z
+get_disease_food_relations,neo4j_query,140.99,8162,2025-08-14T19:49:25.996Z

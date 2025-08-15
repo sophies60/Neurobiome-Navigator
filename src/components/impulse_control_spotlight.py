@@ -5,6 +5,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from .survey import SurveyManager, SurveyType
+import time, asyncio
+from metrics import span, log_csv, now_iso 
 
 # Dictionary of microbiome descriptions
 MICROBIOME_DESCRIPTIONS = {
@@ -231,110 +233,99 @@ async def create_impulse_control_spotlight():
         # Only show graph and insights after submission
         if st.button("Submit Survey"):
             with st.spinner('Analyzing your symptoms...'):
-                # Store survey responses in a dictionary for easy reference
-                survey_responses = {
-                    'Gambling': gambling,
-                    'Shopping': shopping,
-                    'Eating': eating,
-                    'Hypersexuality': hypersexuality,
-                    'Punding': punding
-                }
-                
-                # Save responses to session state
-                survey_manager = SurveyManager()
-                survey_manager.update_responses(SurveyType.IMPULSE_CONTROL, survey_responses)
-                
-                # Create a clean DataFrame with the survey responses in the original order
-                symptom_order = ['Punding', 'Hypersexuality', 'Eating', 'Shopping', 'Gambling']
-                symptoms = pd.DataFrame({
-                    'Symptom': symptom_order,
-                    'Score': [survey_responses[symptom] for symptom in symptom_order]
-                })
-                
-                # Ensure scores are integers
-                symptoms['Score'] = symptoms['Score'].astype(int)
-                
-                st.subheader("Your ICD Symptom Profile")
-                
-                # Create a simple horizontal bar chart
-                fig = go.Figure()
-                
-                # Add bars in the exact order of the symptoms in our DataFrame
-                for _, row in symptoms.iterrows():
-                    fig.add_trace(go.Bar(
-                        x=[row['Score']],
-                        y=[row['Symptom']],
-                        orientation='h',
-                        text=[str(row['Score'])],
-                        textposition='auto',
-                        marker_color='#1f77b4',
-                        showlegend=False
-                    ))
-                
-                # Customize the layout
-                fig.update_layout(
-                    xaxis=dict(
-                        title='Severity (0-5)',
-                        tickvals=[0, 1, 2, 3, 4, 5],
-                        ticktext=['0 (None)', '1', '2', '3', '4', '5 (Severe)'],
-                        range=[0, 5],
-                        showgrid=True,
-                        gridcolor='lightgray',
-                        showline=True,
-                        linewidth=1,
-                        linecolor='lightgray'
-                    ),
-                    yaxis=dict(
-                        title='Symptom',
-                        showline=True,
-                        linewidth=1,
-                        linecolor='lightgray',
-                        # Force the y-axis categories to be in the exact order of our symptom_order
-                        categoryorder='array',
-                        categoryarray=symptom_order[::-1]  # Reverse to match the order in the table
-                    ),
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    height=300,
-                    margin=dict(l=100, r=20, t=30, b=50),
-                    hovermode='closest',
-                    showlegend=False,
-                    # Ensure bars are grouped by symptom
-                    barmode='group'
-                )
-                
-                # Add a title with severity scale explanation
-                st.caption("Severity Scale: 0 = None, 1 = Minimal, 2 = Mild, 3 = Moderate, 4 = Severe, 5 = Extreme")
-                
-                # Display the chart
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Get personalized insights based on the survey responses
-                st.markdown("### Personalized Insights")
-                with st.spinner('Analyzing your responses and researching relevant findings...'):
-                    # Get active symptoms (scores > 0) for the query
-                    active_symptoms = {k: v for k, v in survey_responses.items() if v > 0}
-                    
-                    if not active_symptoms:
-                        st.info("No significant symptoms reported. This is a positive sign!")
-                        return
-                        
-                    # Create a simple, clear query for the AI agent
+                # ---- ALL-UP: measure the whole submit flow
+                with span("insights_total", page="impulse_control"):
+
+                    # Store survey responses
+                    survey_responses = {
+                        'Gambling': gambling,
+                        'Shopping': shopping,
+                        'Eating': eating,
+                        'Hypersexuality': hypersexuality,
+                        'Punding': punding
+                    }
+
+                    # Save to session state
+                    survey_manager = SurveyManager()
+                    survey_manager.update_responses(SurveyType.IMPULSE_CONTROL, survey_responses)
+
+                    # Build DataFrame
+                    symptom_order = ['Punding', 'Hypersexuality', 'Eating', 'Shopping', 'Gambling']
+                    symptoms = pd.DataFrame({
+                        'Symptom': symptom_order,
+                        'Score': [survey_responses[symptom] for symptom in symptom_order]
+                    }).astype({'Score': int})
+
+                    st.subheader("Your ICD Symptom Profile")
+
+                    # ---- Chart render timing
+                    with span("insights_chart_render", page="impulse_control"):
+                        fig = go.Figure()
+                        for _, row in symptoms.iterrows():
+                            fig.add_trace(go.Bar(
+                                x=[row['Score']],
+                                y=[row['Symptom']],
+                                orientation='h',
+                                text=[str(row['Score'])],
+                                textposition='auto',
+                                marker_color='#1f77b4',
+                                showlegend=False
+                            ))
+                        fig.update_layout(
+                            xaxis=dict(
+                                title='Severity (0-5)',
+                                tickvals=[0, 1, 2, 3, 4, 5],
+                                ticktext=['0 (None)', '1', '2', '3', '4', '5 (Severe)'],
+                                range=[0, 5],
+                                showgrid=True,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='lightgray'
+                            ),
+                            yaxis=dict(
+                                title='Symptom',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='lightgray',
+                                categoryorder='array',
+                                categoryarray=symptom_order[::-1]
+                            ),
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            height=300,
+                            margin=dict(l=100, r=20, t=30, b=50),
+                            hovermode='closest',
+                            showlegend=False,
+                            barmode='group'
+                        )
+
+                        st.caption("Severity Scale: 0 = None, 1 = Minimal, 2 = Mild, 3 = Moderate, 4 = Severe, 5 = Extreme")
+                        st.plotly_chart(fig, use_container_width=True)
+
+            # Personalized insights
+            st.markdown("### Personalized Insights")
+            with st.spinner('Analyzing your responses and researching relevant findings...'):
+                active_symptoms = {k: v for k, v in survey_responses.items() if v > 0}
+
+                if not active_symptoms:
+                    st.info("No significant symptoms reported. This is a positive sign!")
+                else:
                     symptom_text = ", ".join([f"{k.lower()} (score: {v}/5)" for k, v in active_symptoms.items()])
-                    
                     query = (
                         f"Based on these Parkinson's symptoms: {symptom_text}. "
-                        "Provide a general overview of ICD symptoms in the context of Parkinson's disease. "
-                        "Provide 2-3 practical, balanced suggestions. "
+                        "Provide a general overview of impulse control disorders (ICD) in the context of Parkinson's disease. "
+                        "Provide 2–3 practical, balanced suggestions. "
                         "Focus on general wellness and common management strategies. "
                         "Avoid clinical language and keep the tone reassuring and clear."
-                    )   
-                    
-                    # Get insights from the AI agent
-                    with st.spinner('Getting insights...'):
+                    )
+
+                    # ---- LLM generation timing (non-streaming)
+                    with span("insights_llm_generation", page="impulse_control"):
                         try:
-                            # Initialize MINERVADependencies with the minerva client
-                            insights = await minerva_agent.run(query, deps=MINERVADependencies(minerva_client=minerva))
-                            # Display the insights in a clean format
+                            insights = await minerva_agent.run(
+                                query,
+                                deps=MINERVADependencies(minerva_client=minerva)
+                            )
                             st.markdown("### Suggestions for You")
                             st.markdown(insights.output)
                         except Exception as e:

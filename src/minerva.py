@@ -6,20 +6,31 @@ from typing import Dict, List, Optional
 import json
 import openai
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQA
-from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from PyPDF2 import PdfReader
 import fitz  # Import PyMuPDF
 import json
 import numpy as np
+from metrics import PerformanceMonitor
 
 class MINERVA:
-    def __init__(self):
-        """Initialize Neo4j connection and research paper processing"""
+    def __init__(self, enable_perf_monitoring: bool = True, perf_monitor=None):
+        """Initialize Neo4j connection and research paper processing
+        
+        Args:
+            enable_perf_monitoring: Whether to enable performance monitoring
+            perf_monitor: Optional external PerformanceMonitor instance
+        """
         load_dotenv()
+        
+        # Initialize performance monitoring
+        self.enable_perf_monitoring = enable_perf_monitoring
+        if self.enable_perf_monitoring:
+            self.perf_monitor = perf_monitor if perf_monitor else PerformanceMonitor()
         
         # Neo4j connection settings
         neo4j_host = os.getenv('NEO4J_HOST', 'localhost')
@@ -39,7 +50,7 @@ class MINERVA:
             chunk_size=1000,
             chunk_overlap=200
         )
-        self.llm = ChatOpenAI(temperature=0.7)
+        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
         
         # Initialize vector store
         self.vector_store = None

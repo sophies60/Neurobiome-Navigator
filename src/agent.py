@@ -8,7 +8,9 @@ from rich.console import Console
 from rich.live import Live
 import asyncio
 import os
-
+import time
+from metrics import timer, log_csv, now_iso
+import uuid
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai import Agent, RunContext
@@ -160,7 +162,7 @@ async def query_food_relationships(ctx: RunContext[MINERVADependencies], disease
         # Get food-disease relationships
         food_relations = ctx.deps.minerva_client.get_disease_food_relations(disease_cui)
         
-        if food_relations.empty:
+        if not food_relations:  # Check if list is empty
             return {
                 "disease": disease_name,
                 "message": f"No food relationships found for {disease_name}.",
@@ -190,46 +192,83 @@ async def query_food_relationships(ctx: RunContext[MINERVADependencies], disease
 
 # ========== Main execution function ==========
 async def main():
-    """Run the MINERVA agent with user queries."""
+    """Run the MINERVA agent with user queries and emit timing metrics."""
     print("MINERVA Agent - Medical Research Assistant")
     print("Enter 'exit' to quit the program.")
 
-    # Initialize MINERVA
+    # Initialize MINERVA client once
     minerva_client = MINERVA()
-    
+
     console = Console()
     messages = []
-    
+
     try:
         while True:
             # Get user input
             user_input = input("\n[You] ")
-            
-            # Check if user wants to exit
+
+            # Exit conditions
             if user_input.lower() in ['exit', 'quit', 'bye', 'goodbye']:
                 print("Goodbye!")
                 break
-            
+
             try:
-                # Process the user input and output the response
+                # ---- Timing: start of agent turn
+                turn_id = str(uuid.uuid4())[:8]  # short id to correlate logs
+                t0 = time.perf_counter()
+                t_first = None
+
                 print("\n[Assistant]")
                 with Live('', console=console, vertical_overflow='visible') as live:
                     # Pass the MINERVA client as a dependency
                     deps = MINERVADependencies(minerva_client=minerva_client)
-                    
+
                     async with minerva_agent.run_stream(
                         user_input, message_history=messages, deps=deps
                     ) as result:
                         curr_message = ""
-                        async for message in result.stream_text(delta=True):
-                            curr_message += message
+
+                        # Stream tokens as they arrive
+                        async for delta in result.stream_text(delta=True):
+                            # Capture time-to-first-token (TTFT) once
+                            if t_first is None:
+                                t_first = time.perf_counter()
+                                ttft_ms = (t_first - t0) * 1000
+                                print(f"[METRIC] turn={turn_id} agent_time_to_first_token_ms={ttft_ms:.2f}")
+                                log_csv({
+                                    "ts": now_iso(),
+                                    "turn_id": turn_id,
+                                    "metric": "agent_ttft",
+                                    "ms": round(ttft_ms, 2),
+                                    "prompt_chars": len(user_input),
+                                })
+
+                            curr_message += delta
                             live.update(Markdown(curr_message))
-                    
-                    # Add the new messages to the chat history
+
+                    # Agent finished streaming — total time
+                    total_ms = (time.perf_counter() - t0) * 1000
+                    print(f"[METRIC] turn={turn_id} agent_total_time_ms={total_ms:.2f} response_chars={len(curr_message)}")
+                    log_csv({
+                        "ts": now_iso(),
+                        "turn_id": turn_id,
+                        "metric": "agent_total_time",
+                        "ms": round(total_ms, 2),
+                        "prompt_chars": len(user_input),
+                        "response_chars": len(curr_message),
+                    })
+
+                    # Persist conversation state
                     messages.extend(result.all_messages())
-                
+
             except Exception as e:
+                # You can also log an error metric row here if you want
                 print(f"\n[Error] An error occurred: {str(e)}")
+                log_csv({
+                    "ts": now_iso(),
+                    "metric": "agent_error",
+                    "error": str(e),
+                })
     finally:
         print("\nMINERVA agent closed.")
 
